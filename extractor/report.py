@@ -93,8 +93,8 @@ def build(invoices: list[Invoice], out_path: Path, folder: str = "invoices/", se
     total = len(invoices)
     review = [i for i in invoices if i.needs_review]
     clean = total - len(review)
-    currency = next((i.currency for i in invoices if i.total is not None), "GBP")
-    sym = "£" if currency == "GBP" else ""
+    currency = next((i.currency for i in invoices if i.total is not None), "USD")
+    sym = {"GBP": "\u00a3", "USD": "$"}.get(currency, "")
 
     rows = []
     for i in invoices:

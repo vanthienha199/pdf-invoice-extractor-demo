@@ -34,6 +34,17 @@ def test_a_rate_between_the_label_and_the_figure_is_skipped():
     assert amount_after_label(["VAT 20 percent 119.28"], [r"\bvat\b"]) == 119.28
 
 
+def test_a_two_decimal_rate_is_not_mistaken_for_the_amount():
+    """A sales tax rate like 10.30% has the same shape as money."""
+    assert amount_after_label(["Sales tax @ 10.30% 76.49"], [r"sales\s+tax"]) == 76.49
+    assert amount_after_label(["Sales tax 10.35 percent 84.12"], [r"sales\s+tax"]) == 84.12
+    assert amount_after_label(["Net 739.00    Sales tax 76.49"], [r"sales\s+tax"]) == 76.49
+
+
+def test_currency_is_read_from_the_document(parsed):
+    assert {i.currency for i in parsed if i.total is not None} == {"USD"}
+
+
 def test_subtotal_is_never_mistaken_for_the_total():
     lines = ["Subtotal 234.55", "VAT @ 20% 46.91", "Total due GBP 281.46"]
     assert amount_after_label(lines, [r"total\s+due", r"amount\s+payable", r"\btotal\b"]) == 281.46

@@ -26,7 +26,7 @@ AMOUNT = re.compile(MONEY)
 # and "subtotal" can never be mistaken for the amount payable.
 TOTAL_LABELS = [r"total\s+due", r"amount\s+payable", r"\btotal\b"]
 NET_LABELS = [r"subtotal", r"\bnet\b"]
-TAX_LABELS = [r"\bvat\b", r"\btax\b"]
+TAX_LABELS = [r"sales\s+tax", r"\bvat\b", r"\btax\b"]
 
 SKIP_IN_DESCRIPTION = ("subtotal", "total", "vat", "tax", "invoice", "amount payable")
 
@@ -57,7 +57,7 @@ class Invoice:
     vendor: str = ""
     invoice_number: str = ""
     invoice_date: str = ""
-    currency: str = "GBP"
+    currency: str = "USD"
     net: float | None = None
     tax: float | None = None
     total: float | None = None
@@ -100,18 +100,29 @@ def normalise_date(text: str) -> str:
     return ""
 
 
+RATE = re.compile(r"\d+(?:\.\d+)?\s*(?:%|percent\b)", re.I)
+
+
 def amount_after_label(lines: list[str], labels: list[str]) -> float | None:
-    """First amount that appears after one of these labels on the same line."""
+    """First amount that appears after one of these labels on the same line.
+
+    A rate written between the label and the figure is removed first. This
+    matters because a sales tax rate such as "10.30%" has the same shape as an
+    amount, so a parser that simply takes the next number reads the rate as the
+    tax and every total stops reconciling.
+    """
     for label in labels:
-        # Lazy gap so a rate written between the label and the amount, such as
-        # "VAT @ 20%" or "VAT 20 percent", does not hide the figure that follows.
-        pattern = re.compile(rf"{label}.*?{MONEY}", re.I)
+        anchor = re.compile(label, re.I)
         for line in lines:
             if label == r"\btotal\b" and re.search(r"sub\s*total", line, re.I):
                 continue
-            match = pattern.search(line)
-            if match:
-                return to_float(match.group(1))
+            match = anchor.search(line)
+            if not match:
+                continue
+            tail = RATE.sub(" ", line[match.end():])
+            money = AMOUNT.search(tail)
+            if money:
+                return to_float(money.group(1))
     return None
 
 
@@ -180,6 +191,11 @@ def parse(path: Path) -> Invoice:
     invoice.invoice_date = normalise_date(date_line) or normalise_date(text)
     if not invoice.invoice_date:
         invoice.flags.append("invoice date could not be read")
+
+    if "£" in text or "gbp" in text.lower():
+        invoice.currency = "GBP"
+    elif "$" in text or "usd" in text.lower():
+        invoice.currency = "USD"
 
     invoice.total = amount_after_label(last_page_lines, TOTAL_LABELS)
     invoice.net = amount_after_label(last_page_lines, NET_LABELS)

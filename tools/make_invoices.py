@@ -20,30 +20,33 @@ from reportlab.pdfgen import canvas as pdfcanvas
 random.seed(7)
 
 OUT = Path(__file__).resolve().parent.parent / "invoices"
-BUYER = ["Fernleaf Studio", "18 Alder Court", "Blue Harbor BH4 2QT"]
+BUYER = ["Fernleaf Studio", "1842 Alder Court, Suite 300", "Portland, OR 97209"]
 
+# Rates are the kind of combined state and local sales tax a small business
+# actually sees, and one supplier is out of state with no nexus, so its tax is
+# zero rather than missing. That difference is what trips naive parsers.
 VENDORS = [
-    ("Oakline Paper Co", "Unit 7 Mill Road, Northgate NG1 4PS", "GB", 0.20),
-    ("Brightwater Utilities", "PO Box 221, Westfield WF9 3LD", "GB", 0.05),
-    ("Tern Logistics", "Dock 3, Harbour Way, Blue Harbor BH1 7RT", "GB", 0.20),
-    ("Nine Yards Print", "44 Foundry Street, Kelsey KY2 8AA", "GB", 0.20),
-    ("Marlow Coffee Supply", "2 Granary Lane, Thornbury TH5 1BE", "GB", 0.00),
-    ("Quayside IT Services", "Suite 12, Pier House, Blue Harbor BH2 9GG", "GB", 0.20),
+    ("Oakline Paper Co", "740 Mill Road, Tacoma, WA 98402", "US", 0.1030),
+    ("Brightwater Utilities", "PO Box 2214, Salem, OR 97301", "US", 0.0000),
+    ("Tern Logistics", "3 Harbor Way, Dock 3, Seattle, WA 98134", "US", 0.1035),
+    ("Nine Yards Print", "44 Foundry Street, Portland, OR 97214", "US", 0.0000),
+    ("Marlow Coffee Supply", "215 Granary Lane, Boise, ID 83702", "US", 0.0600),
+    ("Quayside IT Services", "Pier House, Suite 12, Oakland, CA 94607", "US", 0.1025),
 ]
 
 ITEMS = [
-    ("Recycled A4 paper, 80gsm, box of 5 reams", 5, 24.50),
-    ("Business cards, 400gsm matt, 500", 1, 68.00),
-    ("Courier, next day, up to 10kg", 3, 11.75),
+    ("Recycled copy paper, 20lb, case of 10 reams", 5, 42.75),
+    ("Business cards, 16pt matte, 500", 1, 68.00),
+    ("Courier, next day, up to 20lb", 3, 14.25),
     ("Office electricity, standing charge", 1, 42.10),
     ("Coffee beans, 1kg, house blend", 6, 18.40),
     ("Managed backup, per seat", 12, 4.25),
-    ("Poster print, A1, satin", 8, 9.60),
+    ("Poster print, 24x36, satin", 8, 11.40),
     ("Pallet delivery, local", 1, 95.00),
     ("Toner cartridge, black, high yield", 2, 71.30),
     ("Support hours, out of hours rate", 4, 85.00),
-    ("Envelopes, C4 window, box of 250", 3, 16.75),
-    ("Water cooler refill, 18 litre", 4, 7.90),
+    ("Envelopes, #10 window, box of 500", 3, 19.80),
+    ("Water cooler refill, 5 gallon", 4, 8.95),
 ]
 
 DATES = [
@@ -112,12 +115,12 @@ def layout_classic(c, meta, rows, page_items=None):
     c.drawRightString(150 * mm, y * mm, "Subtotal")
     c.drawRightString(190 * mm, y * mm, money(net))
     y -= 6
-    c.drawRightString(150 * mm, y * mm, f"VAT @ {int(meta['vat_rate'] * 100)}%")
+    c.drawRightString(150 * mm, y * mm, f"Sales tax @ {meta['vat_rate'] * 100:.2f}%")
     c.drawRightString(190 * mm, y * mm, money(vat))
     y -= 7
     c.setFont("Helvetica-Bold", 11)
     c.drawRightString(150 * mm, y * mm, "Total due")
-    c.drawRightString(190 * mm, y * mm, f"GBP {money(gross)}")
+    c.drawRightString(190 * mm, y * mm, f"USD {money(gross)}")
 
 
 def layout_compact(c, meta, rows, page_items=None):
@@ -148,9 +151,9 @@ def layout_compact(c, meta, rows, page_items=None):
     net, vat, gross = meta["totals"]
     y -= 8
     c.setFont("Helvetica", 9)
-    c.drawString(18 * mm, y * mm, f"Net {money(net)}    Tax {money(vat)}")
+    c.drawString(18 * mm, y * mm, f"Net {money(net)}    Sales tax {money(vat)}")
     c.setFont("Helvetica-Bold", 12)
-    c.drawRightString(192 * mm, y * mm, f"AMOUNT PAYABLE GBP {money(gross)}")
+    c.drawRightString(192 * mm, y * mm, f"AMOUNT PAYABLE USD {money(gross)}")
 
 
 def layout_boxed(c, meta, rows, page_items=None):
@@ -171,7 +174,7 @@ def layout_boxed(c, meta, rows, page_items=None):
 
     c.setFillColor(colors.black)
     c.setFont("Helvetica", 9)
-    c.drawString(18 * mm, 248 * mm, "Invoice to Fernleaf Studio, 18 Alder Court, Blue Harbor BH4 2QT")
+    c.drawString(18 * mm, 248 * mm, "Invoice to Fernleaf Studio, 1842 Alder Court Suite 300, Portland OR 97209")
 
     y = 232
     c.setFont("Helvetica-Bold", 9)
@@ -195,11 +198,11 @@ def layout_boxed(c, meta, rows, page_items=None):
     c.setFont("Helvetica", 9)
     c.drawString(124 * mm, (y + 6) * mm, "Subtotal")
     c.drawRightString(188 * mm, (y + 6) * mm, money(net))
-    c.drawString(124 * mm, y * mm, f"VAT {int(meta['vat_rate'] * 100)} percent")
+    c.drawString(124 * mm, y * mm, f"Sales tax {meta['vat_rate'] * 100:.2f} percent")
     c.drawRightString(188 * mm, y * mm, money(vat))
     c.setFont("Helvetica-Bold", 11)
     c.drawString(124 * mm, (y - 8) * mm, "Total")
-    c.drawRightString(188 * mm, (y - 8) * mm, f"GBP {money(gross)}")
+    c.drawRightString(188 * mm, (y - 8) * mm, f"USD {money(gross)}")
 
 
 def layout_scan(c, meta, rows, page_items=None):
@@ -234,8 +237,8 @@ def layout_scan(c, meta, rows, page_items=None):
 
     net, vat, gross = meta["totals"]
     d.text((700, y + 50), f"Subtotal {money(net)}", font=font(20), fill="#1c1c1c")
-    d.text((700, y + 90), f"VAT {money(vat)}", font=font(20), fill="#1c1c1c")
-    d.text((700, y + 140), f"TOTAL GBP {money(gross)}", font=font(26, True), fill="#1c1c1c")
+    d.text((700, y + 90), f"Sales tax {money(vat)}", font=font(20), fill="#1c1c1c")
+    d.text((700, y + 140), f"TOTAL USD {money(gross)}", font=font(26, True), fill="#1c1c1c")
 
     # a scan is never perfectly straight or perfectly clean
     img = img.rotate(-0.6, resample=Image.BICUBIC, fillcolor="#f4f2ed")
