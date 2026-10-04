@@ -11,7 +11,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python3 tools/make_invoices.py          # write the 20 sample PDFs
 python3 -m extractor.cli run            # read them and write out/
-python3 -m pytest tests -q              # 11 tests
+python3 -m pytest tests -q              # 13 tests
 ```
 
 `out/invoices.xlsx` has an Invoices sheet and a Line items sheet, styled for a client rather than dumped: dark header row, frozen panes, filters, dollar formats and banded rows. Anything needing review is tinted amber and sorted to the top, because that is the only part anyone has to act on. `out/summary.html` is a single file you can send on. Point it anywhere with `--input` and `--out`.
