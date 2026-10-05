@@ -1,4 +1,4 @@
-# Invoice PDFs to a spreadsheet (sample project)
+# Okafor Print Co., invoice PDFs to a spreadsheet
 
 One command turns a folder of supplier invoices into a single Excel file, a CSV of invoices, a CSV of line items and an HTML summary. It pulls the supplier, invoice number, date, every line with its quantity and unit price, the net, the tax and the total, then checks its own answers: net plus tax has to equal the total and the line items have to add up to the net. Anything that fails those checks, or has no text layer at all, is flagged for a human instead of being written out as if it were certain.
 
@@ -14,7 +14,7 @@ python3 -m extractor.cli run            # read them and write out/
 python3 -m pytest tests -q              # 13 tests
 ```
 
-`out/invoices.xlsx` has an Invoices sheet and a Line items sheet, styled for a client rather than dumped: dark header row, frozen panes, filters, dollar formats and banded rows. Anything needing review is tinted amber and sorted to the top, because that is the only part anyone has to act on. `out/summary.html` is a single file you can send on. Point it anywhere with `--input` and `--out`.
+`out/invoices.xlsx` has an Invoices sheet and a Line items sheet, styled for a client rather than dumped: dark header row, frozen panes, filters, dollar formats and banded rows. Anything needing review is tinted amber and sorted to the top, because that is the only part anyone has to act on. `out/review/index.html` is the split view, the invoice on the left and what was read on the right, where hovering a value outlines the line it came from. `out/summary.html` is the batch view you can send on. Point it anywhere with `--input` and `--out`.
 
 ## How it decides a row is trustworthy
 

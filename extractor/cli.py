@@ -10,6 +10,7 @@ from pathlib import Path
 from .export import items_to_csv, to_csv, to_excel
 from .parse import parse_folder
 from .report import build as build_report
+from .review import build as build_review
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -62,6 +63,7 @@ def run(args: argparse.Namespace) -> int:
     csv_path = to_csv(invoices, out / "invoices.csv")
     items_path = items_to_csv(invoices, out / "line_items.csv")
     report = build_report(invoices, out / "summary.html", folder=short(folder), seconds=seconds)
+    review_page = build_review(invoices, out / "review", folder, xlsx)
 
     review = sum(1 for i in invoices if i.needs_review)
     value = sum(i.total or 0 for i in invoices)
@@ -72,6 +74,7 @@ def run(args: argparse.Namespace) -> int:
     print(f"  excel    {short(xlsx)}")
     print(f"  csv      {short(csv_path)} and {short(items_path)}")
     print(f"  summary  {short(report)}")
+    print(f"  review   {short(review_page)}")
     return 0
 
 

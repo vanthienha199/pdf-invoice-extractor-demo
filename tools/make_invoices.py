@@ -20,7 +20,7 @@ from reportlab.pdfgen import canvas as pdfcanvas
 random.seed(7)
 
 OUT = Path(__file__).resolve().parent.parent / "invoices"
-BUYER = ["Fernleaf Studio", "1842 Alder Court, Suite 300", "Portland, OR 97209"]
+BUYER = ["Okafor Print Co.", "1842 Alder Court, Suite 300", "Portland, OR 97209"]
 
 # Rates are the kind of combined state and local sales tax a small business
 # actually sees, and one supplier is out of state with no nexus, so its tax is
@@ -131,7 +131,7 @@ def layout_compact(c, meta, rows, page_items=None):
     c.setFont("Helvetica", 8)
     c.drawString(18 * mm, 273 * mm, v[1])
     c.drawString(18 * mm, 268 * mm, f"Tax invoice {meta['number']}   Dated {meta['date']}")
-    c.drawString(18 * mm, 263 * mm, "Customer: Fernleaf Studio")
+    c.drawString(18 * mm, 263 * mm, "Customer: Okafor Print Co.")
 
     y = 250
     c.setFont("Helvetica-Bold", 8)
@@ -174,7 +174,7 @@ def layout_boxed(c, meta, rows, page_items=None):
 
     c.setFillColor(colors.black)
     c.setFont("Helvetica", 9)
-    c.drawString(18 * mm, 248 * mm, "Invoice to Fernleaf Studio, 1842 Alder Court Suite 300, Portland OR 97209")
+    c.drawString(18 * mm, 248 * mm, "Invoice to Okafor Print Co., 1842 Alder Court Suite 300, Portland OR 97209")
 
     y = 232
     c.setFont("Helvetica-Bold", 9)
@@ -227,7 +227,7 @@ def layout_scan(c, meta, rows, page_items=None):
     d.text((90, 150), v[1], font=font(20), fill="#333333")
     d.text((90, 225), f"INVOICE {meta['number']}", font=font(28, True), fill="#1c1c1c")
     d.text((90, 268), f"Date {meta['date']}", font=font(20), fill="#333333")
-    d.text((90, 300), "Customer: Fernleaf Studio", font=font(20), fill="#333333")
+    d.text((90, 300), "Customer: Okafor Print Co.", font=font(20), fill="#333333")
 
     y = 380
     for desc, qty, price in rows:

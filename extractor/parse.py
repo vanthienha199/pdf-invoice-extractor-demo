@@ -44,11 +44,27 @@ def to_float(text: str) -> float:
 
 
 @dataclass
+class Box:
+    """Where a value sits on the page, in PDF points, so the UI can outline it."""
+
+    page: int
+    x0: float
+    top: float
+    x1: float
+    bottom: float
+
+    def as_dict(self) -> dict:
+        return {"page": self.page, "x0": round(self.x0, 1), "top": round(self.top, 1),
+                "x1": round(self.x1, 1), "bottom": round(self.bottom, 1)}
+
+
+@dataclass
 class LineItem:
     description: str
     quantity: int
     unit_price: float
     amount: float
+    box: Box | None = None
 
 
 @dataclass
@@ -65,6 +81,9 @@ class Invoice:
     line_items: list[LineItem] = field(default_factory=list)
     confidence: float = 0.0
     flags: list[str] = field(default_factory=list)
+    boxes: dict = field(default_factory=dict)
+    page_sizes: list = field(default_factory=list)
+    notes: dict = field(default_factory=dict)
 
     @property
     def needs_review(self) -> bool:
@@ -103,7 +122,7 @@ def normalise_date(text: str) -> str:
 RATE = re.compile(r"\d+(?:\.\d+)?\s*(?:%|percent\b)", re.I)
 
 
-def amount_after_label(lines: list[str], labels: list[str]) -> float | None:
+def locate_amount(lines: list[str], labels: list[str]) -> tuple[float | None, int | None]:
     """First amount that appears after one of these labels on the same line.
 
     A rate written between the label and the figure is removed first. This
@@ -113,7 +132,7 @@ def amount_after_label(lines: list[str], labels: list[str]) -> float | None:
     """
     for label in labels:
         anchor = re.compile(label, re.I)
-        for line in lines:
+        for index, line in enumerate(lines):
             if label == r"\btotal\b" and re.search(r"sub\s*total", line, re.I):
                 continue
             match = anchor.search(line)
@@ -122,8 +141,12 @@ def amount_after_label(lines: list[str], labels: list[str]) -> float | None:
             tail = RATE.sub(" ", line[match.end():])
             money = AMOUNT.search(tail)
             if money:
-                return to_float(money.group(1))
-    return None
+                return to_float(money.group(1)), index
+    return None, None
+
+
+def amount_after_label(lines: list[str], labels: list[str]) -> float | None:
+    return locate_amount(lines, labels)[0]
 
 
 def vendor_from_page(page) -> str:
@@ -138,8 +161,9 @@ def vendor_from_page(page) -> str:
 
 
 def parse_line_items(lines: list[str]) -> list[LineItem]:
+    """Line items, in the order the invoice prints them."""
     items: list[LineItem] = []
-    for line in lines:
+    for index, line in enumerate(lines):
         match = LINE_ITEM.match(line.strip())
         if not match:
             continue
@@ -151,7 +175,9 @@ def parse_line_items(lines: list[str]) -> list[LineItem]:
         amount = to_float(match.group(4))
         if abs(qty * unit - amount) > 0.02:
             continue
-        items.append(LineItem(desc, qty, unit, amount))
+        item = LineItem(desc, qty, unit, amount)
+        item.source_line = index
+        items.append(item)
     return items
 
 
@@ -159,16 +185,32 @@ def parse(path: Path) -> Invoice:
     path = Path(path)
     invoice = Invoice(source_file=path.name)
 
+    located: list[dict] = []
     with pdfplumber.open(path) as pdf:
         invoice.pages = len(pdf.pages)
         page_texts = [(page.extract_text() or "") for page in pdf.pages]
+        invoice.page_sizes = [{"width": round(p.width, 1), "height": round(p.height, 1)} for p in pdf.pages]
+        for number, page in enumerate(pdf.pages):
+            for row in page.extract_text_lines():
+                located.append({
+                    "text": row["text"].strip(),
+                    "box": Box(number, row["x0"], row["top"], row["x1"], row["bottom"]),
+                })
         vendor = vendor_from_page(pdf.pages[0]) if pdf.pages else ""
 
-    text = "\n".join(page_texts)
-    lines = [l.strip() for l in text.splitlines() if l.strip()]
-    # A multi page invoice carries a running subtotal on every page and the real
-    # totals only on the last one, so totals are read from the last page alone.
-    last_page_lines = [l.strip() for l in page_texts[-1].splitlines() if l.strip()]
+    # Lines come from the located rows so every index maps back to a position on
+    # the page. That is what lets the split view outline a value on the document.
+    located = [row for row in located if row["text"]]
+    lines = [row["text"] for row in located]
+    text = "\n".join(lines)
+    last_page = invoice.pages - 1
+    last_rows = [row for row in located if row["box"].page == last_page]
+    last_page_lines = [row["text"] for row in last_rows]
+
+    def remember(name: str, index: int | None, rows=None) -> None:
+        source = rows if rows is not None else located
+        if index is not None and 0 <= index < len(source):
+            invoice.boxes[name] = source[index]["box"].as_dict()
 
     if len("".join(lines)) < 40:
         invoice.flags.append("no text layer, this looks like a scan and needs OCR or manual entry")
@@ -182,25 +224,57 @@ def parse(path: Path) -> Invoice:
         invoice.vendor = invoice.vendor or ""
         invoice.flags.append("vendor name not confidently identified")
 
+    if located:
+        invoice.boxes["vendor"] = located[0]["box"].as_dict()
+        for row in located:
+            if row["text"] == vendor:
+                invoice.boxes["vendor"] = row["box"].as_dict()
+                break
+
     found = NUMBER.search(text)
     invoice.invoice_number = found.group(1).replace(" ", "-").upper() if found else ""
     if not invoice.invoice_number:
         invoice.flags.append("no invoice number found")
+    else:
+        remember("invoice_number", next((i for i, l in enumerate(lines) if NUMBER.search(l)), None))
 
-    date_line = next((l for l in lines if re.search(r"date|dated", l, re.I)), "")
+    date_index = next((i for i, l in enumerate(lines) if re.search(r"date|dated", l, re.I)), None)
+    date_line = lines[date_index] if date_index is not None else ""
     invoice.invoice_date = normalise_date(date_line) or normalise_date(text)
     if not invoice.invoice_date:
         invoice.flags.append("invoice date could not be read")
+    elif normalise_date(date_line):
+        remember("invoice_date", date_index)
 
     if "£" in text or "gbp" in text.lower():
         invoice.currency = "GBP"
     elif "$" in text or "usd" in text.lower():
         invoice.currency = "USD"
 
-    invoice.total = amount_after_label(last_page_lines, TOTAL_LABELS)
-    invoice.net = amount_after_label(last_page_lines, NET_LABELS)
-    invoice.tax = amount_after_label(last_page_lines, TAX_LABELS)
+    invoice.total, total_at = locate_amount(last_page_lines, TOTAL_LABELS)
+    invoice.net, net_at = locate_amount(last_page_lines, NET_LABELS)
+    invoice.tax, tax_at = locate_amount(last_page_lines, TAX_LABELS)
+    remember("total", total_at, last_rows)
+    remember("net", net_at, last_rows)
+    remember("tax", tax_at, last_rows)
+
+    # A running subtotal on an earlier page is a trap worth disclosing rather
+    # than hiding: the figure used comes from the last page, and the reader is
+    # told the earlier one exists so they can confirm it.
+    if invoice.pages > 1 and invoice.net is not None:
+        earlier = [row["text"] for row in located if row["box"].page < last_page]
+        running, _ = locate_amount(earlier, NET_LABELS)
+        if running is not None and abs(running - invoice.net) > 0.02:
+            invoice.notes["net"] = (
+                f"page 1 shows a running subtotal of {running:,.2f}, "
+                f"the figure used is from page {invoice.pages}"
+            )
+
     invoice.line_items = parse_line_items(lines)
+    for item in invoice.line_items:
+        index = getattr(item, "source_line", None)
+        if index is not None and 0 <= index < len(located):
+            item.box = located[index]["box"]
 
     score = 0.0
     if invoice.vendor and invoice.vendor.lower() not in GENERIC_HEADINGS:
