@@ -48,6 +48,9 @@ select{font:inherit;padding:7px 10px;border:1px solid var(--hair);border-radius:
 .btn.quiet:hover{background:var(--cyan-soft)}
 
 .split{display:grid;grid-template-columns:minmax(0,1fr) 430px;gap:22px;align-items:start}
+@media (max-width:900px){.split{grid-template-columns:minmax(0,1fr)}
+  .doc{max-height:none}
+  .shell{padding:20px 18px 26px}}
 .doc{background:var(--surface);border:1px solid var(--hair);border-radius:8px;padding:14px;position:relative;
   max-height:calc(100vh - 215px);overflow:auto}
 .pagewrap{position:relative;line-height:0}
